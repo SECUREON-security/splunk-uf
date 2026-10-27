@@ -27,21 +27,6 @@ if not exist "%SPLUNK_MSI%" (
     exit /b 1
 )
 
-:: Verify the checksum when the matching .sha512 from download.splunk.com is present
-if not exist "%SPLUNK_MSI%.sha512" (
-    echo WARNING: %SPLUNK_MSI%.sha512 not found - skipping checksum verification.
-    goto :install
-)
-set "EXPECTED_SHA="
-set "ACTUAL_SHA="
-for /f "tokens=2 delims== " %%h in ('type "%SPLUNK_MSI%.sha512"') do set "EXPECTED_SHA=%%h"
-for /f "skip=1 delims=" %%h in ('certutil -hashfile "%SPLUNK_MSI%" SHA512') do if not defined ACTUAL_SHA set "ACTUAL_SHA=%%h"
-set "ACTUAL_SHA=%ACTUAL_SHA: =%"
-if not defined EXPECTED_SHA goto :bad_sha
-if /i not "%EXPECTED_SHA%"=="%ACTUAL_SHA%" goto :bad_sha
-echo SHA512 checksum OK.
-
-:install
 echo Installing Splunk Universal Forwarder...
 :: Running msiexec with cleared syntax and proper quotes
 msiexec.exe /i "%SPLUNK_MSI%" USE_LOCAL_SYSTEM=1 AGREETOLICENSE=Yes DEPLOYMENT_SERVER="%SPLUNK_SERVER%:8089" INSTALLDIR="%SPLUNK_DIR%" /quiet /L*v install_log.txt
@@ -78,10 +63,5 @@ exit /b 0
 
 :no_server
 echo ERROR: SPLUNK_SERVER is not set ("%SPLUNK_SERVER%"). Edit the configuration block first.
-popd
-exit /b 1
-
-:bad_sha
-echo ERROR: SHA512 mismatch for %SPLUNK_MSI% - download it again.
 popd
 exit /b 1

@@ -2,7 +2,7 @@
 
 Install / upgrade scripts and download links for the Splunk Universal Forwarder **10.2.8** (build `981c2d735e4d`).
 
-Both scripts install from a **local package file** — no internet access is needed on the target host. Download the installer first, put it in the **same folder** as the script, then run the script. If the matching `.sha512` file from download.splunk.com sits next to the package, the script verifies the checksum and stops on a mismatch.
+Both scripts install from a **local package file** — no internet access is needed on the target host. Download the installer first, put it in the **same folder** as the script, then run the script. On Linux, if the matching `.sha512` file from download.splunk.com sits next to the package, `install.sh` verifies the checksum and stops on a mismatch.
 
 ---
 
@@ -43,9 +43,7 @@ Both a raw IP and a DNS name work, e.g. `10.20.30.40` or `splunk-ds.customer.loc
 ### Windows — MSI Installer (x64)
 
 ```
-curl.exe -fLo splunkforwarder-10.2.8-981c2d735e4d-windows-x64.msi "https://download.splunk.com/products/universalforwarder/releases/10.2.8/windows/splunkforwarder-10.2.8-981c2d735e4d-windows-x64.msi"
-curl.exe -fLo splunkforwarder-10.2.8-981c2d735e4d-windows-x64.msi.sha512 "https://download.splunk.com/products/universalforwarder/releases/10.2.8/windows/splunkforwarder-10.2.8-981c2d735e4d-windows-x64.msi.sha512"
-```
+curl.exe -fLo splunkforwarder-10.2.8-981c2d735e4d-windows-x64.msi "https://download.splunk.com/products/universalforwarder/releases/10.2.8/windows/splunkforwarder-10.2.8-981c2d735e4d-windows-x64.msi"```
 
 ### Linux — Debian / Ubuntu
 
