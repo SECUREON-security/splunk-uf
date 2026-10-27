@@ -1,0 +1,4 @@
+# Bash breaks on CRLF; cmd prefers CRLF (stored as-is so GitHub raw downloads keep it)
+* text=auto
+*.sh text eol=lf
+*.bat -text

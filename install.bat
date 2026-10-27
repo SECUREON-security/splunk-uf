@@ -7,39 +7,81 @@ if %errorLevel% neq 0 (
     exit /b 1
 )
 
+:: "Run as administrator" starts in C:\Windows\System32 - work from the script's folder
+pushd "%~dp0"
+
 :: --- CONFIGURATION VARIABLES ---
-set "SPLUNK_MSI=splunkforwarder-10.2.7-c0bff5b0fac3-windows-x64.msi"
+set "SPLUNK_MSI=splunkforwarder-10.2.8-981c2d735e4d-windows-x64.msi"
 set "SPLUNK_SERVER=10.x.x.x"
 set "SPLUNK_DIR=C:\Program Files\SplunkUniversalForwarder"
 set "SPLUNK_BIN=%SPLUNK_DIR%\bin\splunk.exe"
 
-:: Verify the installer file actually exists in the current directory
+:: Refuse to run with the placeholder Deployment Server
+if "%SPLUNK_SERVER%"=="" goto :no_server
+if /i "%SPLUNK_SERVER:x.x=%" neq "%SPLUNK_SERVER%" goto :no_server
+
+:: Verify the installer file actually exists in the script directory
 if not exist "%SPLUNK_MSI%" (
-    echo ERROR: %SPLUNK_MSI% not found in the current directory!
+    echo ERROR: %SPLUNK_MSI% not found in %CD%!
+    popd
     exit /b 1
 )
 
+:: Verify the checksum when the matching .sha512 from download.splunk.com is present
+if not exist "%SPLUNK_MSI%.sha512" (
+    echo WARNING: %SPLUNK_MSI%.sha512 not found - skipping checksum verification.
+    goto :install
+)
+set "EXPECTED_SHA="
+set "ACTUAL_SHA="
+for /f "tokens=2 delims== " %%h in ('type "%SPLUNK_MSI%.sha512"') do set "EXPECTED_SHA=%%h"
+for /f "skip=1 delims=" %%h in ('certutil -hashfile "%SPLUNK_MSI%" SHA512') do if not defined ACTUAL_SHA set "ACTUAL_SHA=%%h"
+set "ACTUAL_SHA=%ACTUAL_SHA: =%"
+if not defined EXPECTED_SHA goto :bad_sha
+if /i not "%EXPECTED_SHA%"=="%ACTUAL_SHA%" goto :bad_sha
+echo SHA512 checksum OK.
+
+:install
 echo Installing Splunk Universal Forwarder...
 :: Running msiexec with cleared syntax and proper quotes
 msiexec.exe /i "%SPLUNK_MSI%" USE_LOCAL_SYSTEM=1 AGREETOLICENSE=Yes DEPLOYMENT_SERVER="%SPLUNK_SERVER%:8089" INSTALLDIR="%SPLUNK_DIR%" /quiet /L*v install_log.txt
+set "MSI_RC=%errorlevel%"
 
-if %errorlevel% equ 0 (
+:: 3010 = success, reboot required
+if "%MSI_RC%"=="3010" echo NOTE: Installation succeeded, a reboot is required to complete it.
+if "%MSI_RC%"=="3010" set "MSI_RC=0"
+
+if %MSI_RC% equ 0 (
     echo Installation success!
-    
+
     echo Restarting Splunk Service to apply changes...
     "%SPLUNK_BIN%" restart --accept-license --answer-yes --no-prompt
-    
+
     echo Updating Splunk Windows Service Configurations...
     :: Set service to Delayed Start
     sc config SplunkForwarder start=delayed-auto
-    
+
     :: Set recovery actions (Restart service after 1 minute on 1st/2nd failures)
     sc failure SplunkForwarder actions=restart/60000/restart/60000/""/60000 reset=86400
-    
+
     echo Configuration update complete.
 ) else (
-    echo ERROR: File %SPLUNK_MSI% installation failed with exit code %errorlevel%!
-    echo Check install_log.txt for details.
+    echo ERROR: File %SPLUNK_MSI% installation failed with exit code %MSI_RC%!
+    echo Check %CD%\install_log.txt for details.
+    popd
+    exit /b %MSI_RC%
 )
 
 echo.
+popd
+exit /b 0
+
+:no_server
+echo ERROR: SPLUNK_SERVER is not set ("%SPLUNK_SERVER%"). Edit the configuration block first.
+popd
+exit /b 1
+
+:bad_sha
+echo ERROR: SHA512 mismatch for %SPLUNK_MSI% - download it again.
+popd
+exit /b 1
