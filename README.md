@@ -43,22 +43,22 @@ Both a raw IP and a DNS name work, e.g. `10.20.30.40` or `splunk-ds.customer.loc
 ### Windows — MSI Installer (x64)
 
 ```
-wget -O splunkforwarder-10.2.8-981c2d735e4d-windows-x64.msi "https://download.splunk.com/products/universalforwarder/releases/10.2.8/windows/splunkforwarder-10.2.8-981c2d735e4d-windows-x64.msi"
-wget -O splunkforwarder-10.2.8-981c2d735e4d-windows-x64.msi.sha512 "https://download.splunk.com/products/universalforwarder/releases/10.2.8/windows/splunkforwarder-10.2.8-981c2d735e4d-windows-x64.msi.sha512"
+curl.exe -fLo splunkforwarder-10.2.8-981c2d735e4d-windows-x64.msi "https://download.splunk.com/products/universalforwarder/releases/10.2.8/windows/splunkforwarder-10.2.8-981c2d735e4d-windows-x64.msi"
+curl.exe -fLo splunkforwarder-10.2.8-981c2d735e4d-windows-x64.msi.sha512 "https://download.splunk.com/products/universalforwarder/releases/10.2.8/windows/splunkforwarder-10.2.8-981c2d735e4d-windows-x64.msi.sha512"
 ```
 
 ### Linux — Debian / Ubuntu
 
 ```
-wget -O splunkforwarder-10.2.8-981c2d735e4d-linux-amd64.deb "https://download.splunk.com/products/universalforwarder/releases/10.2.8/linux/splunkforwarder-10.2.8-981c2d735e4d-linux-amd64.deb"
-wget -O splunkforwarder-10.2.8-981c2d735e4d-linux-amd64.deb.sha512 "https://download.splunk.com/products/universalforwarder/releases/10.2.8/linux/splunkforwarder-10.2.8-981c2d735e4d-linux-amd64.deb.sha512"
+curl -fLo splunkforwarder-10.2.8-981c2d735e4d-linux-amd64.deb "https://download.splunk.com/products/universalforwarder/releases/10.2.8/linux/splunkforwarder-10.2.8-981c2d735e4d-linux-amd64.deb"
+curl -fLo splunkforwarder-10.2.8-981c2d735e4d-linux-amd64.deb.sha512 "https://download.splunk.com/products/universalforwarder/releases/10.2.8/linux/splunkforwarder-10.2.8-981c2d735e4d-linux-amd64.deb.sha512"
 ```
 
 ### Linux — RHEL / CentOS / Rocky
 
 ```
-wget -O splunkforwarder-10.2.8-981c2d735e4d.x86_64.rpm "https://download.splunk.com/products/universalforwarder/releases/10.2.8/linux/splunkforwarder-10.2.8-981c2d735e4d.x86_64.rpm"
-wget -O splunkforwarder-10.2.8-981c2d735e4d.x86_64.rpm.sha512 "https://download.splunk.com/products/universalforwarder/releases/10.2.8/linux/splunkforwarder-10.2.8-981c2d735e4d.x86_64.rpm.sha512"
+curl -fLo splunkforwarder-10.2.8-981c2d735e4d.x86_64.rpm "https://download.splunk.com/products/universalforwarder/releases/10.2.8/linux/splunkforwarder-10.2.8-981c2d735e4d.x86_64.rpm"
+curl -fLo splunkforwarder-10.2.8-981c2d735e4d.x86_64.rpm.sha512 "https://download.splunk.com/products/universalforwarder/releases/10.2.8/linux/splunkforwarder-10.2.8-981c2d735e4d.x86_64.rpm.sha512"
 ```
 
 ---
