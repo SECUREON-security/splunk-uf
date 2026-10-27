@@ -12,8 +12,8 @@
 set -euo pipefail
 
 ### Variables — edit before deploying
-SPLUNK_UF_VERSION_RPM="splunkforwarder-10.2.7-c0bff5b0fac3.x86_64.rpm"
-SPLUNK_UF_VERSION_DEB="splunkforwarder-10.2.7-c0bff5b0fac3-linux-amd64.deb"
+SPLUNK_UF_VERSION_RPM="splunkforwarder-10.2.8-981c2d735e4d.x86_64.rpm"
+SPLUNK_UF_VERSION_DEB="splunkforwarder-10.2.8-981c2d735e4d-linux-amd64.deb"
 DEPLOYMENT_SERVER="10.x.x.x"     # IP or hostname of your Splunk Deployment Server
 DEPLOYMENT_PORT="8089"
 INSTALL_DIR="/opt"
@@ -27,8 +27,13 @@ RECONCILE_CONFIG=1                 # 1 = re-assert deploymentclient.conf even wh
 # =============================================================================
 SPLUNK_HOME="$INSTALL_DIR/splunkforwarder"
 SPLUNK_BIN="$SPLUNK_HOME/bin/splunk"
+SYSTEMD_UNIT="/etc/systemd/system/SplunkForwarder.service"
+USER_SEED="$SPLUNK_HOME/etc/system/local/user-seed.conf"
 LOG_FILE="/var/log/splunkuf-install.log"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# --- Root check (before the log redirect, which needs to write /var/log) ---
+[ "$(id -u)" = "0" ] || { echo "ERROR: This script must be run as root." >&2; exit 1; }
 
 # Redirect all output to log file AND stdout.
 exec > >(tee -a "$LOG_FILE") 2>&1
@@ -54,8 +59,12 @@ case "$SPLUNK_HOME" in
 esac
 [ "${SPLUNK_HOME#/}" != "$SPLUNK_HOME" ] || fail "SPLUNK_HOME must be an absolute path ('$SPLUNK_HOME')."
 
-# --- Root check ---
-[ "$(id -u)" = "0" ] || fail "This script must be run as root."
+# --- Placeholder guard: the shipped default is not a valid Deployment Server ---
+case "$DEPLOYMENT_SERVER" in
+    ""|*x.x*)
+        fail "DEPLOYMENT_SERVER is not set ('$DEPLOYMENT_SERVER'). Edit the variables block first."
+        ;;
+esac
 
 # --- Detect OS package manager and set binary path ---
 if command -v dpkg > /dev/null 2>&1; then
@@ -73,6 +82,17 @@ echo "INFO: Detected package type: $PKG_TYPE"
 [ -f "$PKG_FILE" ] || fail "Package file not found: $PKG_FILE. Place the installer in the same directory as this script."
 echo "INFO: Package file found: $PKG_FILE"
 
+# --- Verify checksum when the matching .sha512 from download.splunk.com is present ---
+if [ -f "$PKG_FILE.sha512" ]; then
+    EXPECTED_SHA="$(grep -oE '[a-f0-9]{128}' "$PKG_FILE.sha512" || true)"
+    [ -n "$EXPECTED_SHA" ] || fail "No SHA512 hash found in $PKG_FILE.sha512."
+    ACTUAL_SHA="$(sha512sum "$PKG_FILE" | awk '{print $1}')"
+    [ "$ACTUAL_SHA" = "$EXPECTED_SHA" ] || fail "SHA512 mismatch for $PKG_FILE — download it again."
+    echo "INFO: SHA512 checksum OK."
+else
+    echo "WARNING: $PKG_FILE.sha512 not found — skipping checksum verification."
+fi
+
 # --- Detect init system (systemd vs init.d) ---
 INIT_PROC="$(ps --no-headers -o comm 1 2>/dev/null || true)"
 if [ "$INIT_PROC" = "systemd" ]; then
@@ -84,8 +104,8 @@ else
 fi
 
 # --- Extract target version/build from package filename ---
-TARGET_VERSION="$(echo "$PKG_FILE" | grep -oP 'splunkforwarder-\K[0-9]+\.[0-9]+\.[0-9]+' || true)"
-TARGET_BUILD="$(echo "$PKG_FILE"   | grep -oP 'splunkforwarder-[0-9.]+-\K[a-f0-9]+' || true)"
+TARGET_VERSION="$(basename "$PKG_FILE" | grep -oP 'splunkforwarder-\K[0-9]+\.[0-9]+\.[0-9]+' || true)"
+TARGET_BUILD="$(basename "$PKG_FILE"   | grep -oP 'splunkforwarder-[0-9.]+-\K[a-f0-9]+' || true)"
 [ -n "$TARGET_VERSION" ] || fail "Could not parse target version from package filename."
 [ -n "$TARGET_BUILD" ]   || fail "Could not parse target build from package filename."
 echo "INFO: Target version: $TARGET_VERSION  build: $TARGET_BUILD"
@@ -115,6 +135,11 @@ start_splunk() {
     if [ "$USE_SYSTEMD" = "1" ]; then
         # Accept license and handle initialization via CLI first
         "$SPLUNK_BIN" start --no-prompt --accept-license --answer-yes || fail "Failed initialization via CLI."
+        if [ ! -f "$SYSTEMD_UNIT" ]; then
+            # The package ships no unit: stop the CLI-started splunkd and hand it over to systemd.
+            "$SPLUNK_BIN" stop || fail "Failed to stop Splunk UF before enabling boot-start."
+            enable_boot_start
+        fi
         systemctl start SplunkForwarder || fail "Splunk UF failed to start via systemd."
     else
         "$SPLUNK_BIN" start --no-prompt --accept-license --answer-yes || fail "Splunk UF failed to start."
@@ -123,15 +148,15 @@ start_splunk() {
 
 enable_boot_start() {
     if [ "$USE_SYSTEMD" = "1" ]; then
-        if [ -f /etc/systemd/system/SplunkForwarder.service ]; then
+        if [ -f "$SYSTEMD_UNIT" ]; then
             echo "INFO: systemd unit already present — skipping boot-start regeneration."
         else
-            "$SPLUNK_BIN" enable boot-start -systemd-managed 1 --no-prompt --accept-license --answer-yes
+            "$SPLUNK_BIN" enable boot-start -systemd-managed 1 -user root --no-prompt --accept-license --answer-yes
         fi
         systemctl daemon-reload
         systemctl enable SplunkForwarder 2>/dev/null || true
     else
-        "$SPLUNK_BIN" enable boot-start -systemd-managed 0 --no-prompt --accept-license --answer-yes
+        "$SPLUNK_BIN" enable boot-start -systemd-managed 0 -user root --no-prompt --accept-license --answer-yes
     fi
 }
 
@@ -142,11 +167,11 @@ IS_UPGRADE=0
 VERSION_MATCH=0
 
 if [ -f "$SPLUNK_BIN" ]; then
-    MANIFEST="$(find "$SPLUNK_HOME" -maxdepth 1 -name '*-manifest' 2>/dev/null | head -1)"
-    if [ -n "$MANIFEST" ]; then
-        MANIFEST_NAME="$(basename "$MANIFEST")"
-        CURRENT_VERSION="$(echo "$MANIFEST_NAME" | grep -oP 'splunkforwarder-\K[0-9]+\.[0-9]+\.[0-9]+' || true)"
-        CURRENT_BUILD="$(echo "$MANIFEST_NAME" | grep -oP 'splunkforwarder-[0-9.]+-\K[a-f0-9]+' || true)"
+    # etc/splunk.version is the authoritative source (old *-manifest files can linger).
+    VERSION_FILE="$SPLUNK_HOME/etc/splunk.version"
+    if [ -f "$VERSION_FILE" ]; then
+        CURRENT_VERSION="$(sed -n 's/^VERSION=//p' "$VERSION_FILE" | tr -d '\r')"
+        CURRENT_BUILD="$(sed -n 's/^BUILD=//p' "$VERSION_FILE" | tr -d '\r')"
         echo "INFO: Currently installed version: ${CURRENT_VERSION:-unknown}  build: ${CURRENT_BUILD:-unknown}"
 
         if [ -n "$CURRENT_VERSION" ] && [ -n "$CURRENT_BUILD" ] \
@@ -166,7 +191,7 @@ if [ -f "$SPLUNK_BIN" ]; then
             IS_UPGRADE=1
         fi
     else
-        echo "WARNING: Splunk binary found but manifest is missing — handling as an upgrade to safeguard state."
+        echo "WARNING: Splunk binary found but splunk.version is missing — handling as an upgrade to safeguard state."
         IS_FRESH_INSTALL=0
         IS_UPGRADE=1
     fi
@@ -233,12 +258,14 @@ if [ "$IS_FRESH_INSTALL" = "1" ]; then
     write_deploymentclient
 
     echo "--- Fresh install: Injecting transient user-seed configuration ---"
-    cat > "$SPLUNK_HOME/etc/system/local/user-seed.conf" <<EOF
+    # Remove the seed file even if a later step fails.
+    trap 'rm -f "$USER_SEED"' EXIT
+    ( umask 077; cat > "$USER_SEED" <<EOF
 [user_info]
 USERNAME = admin
 PASSWORD = ${SPLUNK_TEMPADMINPASS}
 EOF
-    chmod 600 "$SPLUNK_HOME/etc/system/local/user-seed.conf"
+    )
 
     echo "--- Fresh install: Restricting directory path permissions ---"
     chown -R root:root "$SPLUNK_HOME"
@@ -247,7 +274,7 @@ EOF
     start_splunk
 
     echo "--- Fresh install: Removing user-seed credentials ---"
-    rm -f "$SPLUNK_HOME/etc/system/local/user-seed.conf"
+    rm -f "$USER_SEED"
 
     echo "--- Fresh install: Configuring boot persistent scripts ---"
     enable_boot_start
