@@ -11,7 +11,7 @@ if %errorLevel% neq 0 (
 pushd "%~dp0"
 
 :: --- CONFIGURATION VARIABLES ---
-set "SPLUNK_MSI=splunkforwarder-10.2.8-981c2d735e4d-windows-x64.msi"
+set "SPLUNK_MSI=splunkforwarder-10.2.9-41bebfa38eb4-windows-x64.msi"
 set "SPLUNK_SERVER=10.x.x.x"
 set "SPLUNK_DIR=C:\Program Files\SplunkUniversalForwarder"
 set "SPLUNK_BIN=%SPLUNK_DIR%\bin\splunk.exe"
